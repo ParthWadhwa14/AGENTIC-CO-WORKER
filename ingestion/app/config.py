@@ -82,6 +82,7 @@ GOOGLE_DEFAULT_READONLY_SCOPES = (
 
 class Settings:
     QDRANT_URL: str = os.getenv("QDRANT_URL", "http://localhost:6333")
+    QDRANT_API_KEY: str | None = os.getenv("QDRANT_API_KEY") or None
     QDRANT_COLLECTION: str = os.getenv(
         "QDRANT_COLLECTION",
         "personal_workspace_chunks"

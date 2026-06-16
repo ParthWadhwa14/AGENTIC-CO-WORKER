@@ -371,6 +371,7 @@ Fill the important values:
 
 ```bash
 QDRANT_URL=http://localhost:6333
+QDRANT_API_KEY=
 QDRANT_COLLECTION=personal_workspace_chunks
 EMBEDDING_MODEL=BAAI/bge-small-en-v1.5
 
@@ -525,6 +526,7 @@ http://localhost:3000
 | Variable | Purpose |
 | --- | --- |
 | `QDRANT_URL` | Qdrant server URL. |
+| `QDRANT_API_KEY` | Qdrant API key. Leave empty for local Docker Qdrant; set it for Qdrant Cloud. |
 | `QDRANT_COLLECTION` | Collection used for workspace chunks. |
 | `EMBEDDING_MODEL` | FastEmbed embedding model. |
 | `GROQ_API_KEY` | Groq API key for LLM generation. |

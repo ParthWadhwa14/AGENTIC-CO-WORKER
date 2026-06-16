@@ -25,7 +25,10 @@ def setup_status():
         "error": None,
     }
     try:
-        client = QdrantClient(url=settings.QDRANT_URL)
+        client = QdrantClient(
+            url=settings.QDRANT_URL,
+            api_key=settings.QDRANT_API_KEY,
+        )
         collections = [c.name for c in client.get_collections().collections]
         qdrant_status["reachable"] = True
         qdrant_status["collection_exists"] = (
