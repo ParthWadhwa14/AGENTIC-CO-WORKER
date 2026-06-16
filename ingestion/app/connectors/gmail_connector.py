@@ -1,7 +1,9 @@
 import base64
+import mimetypes
 import re
 from email.message import EmailMessage
 from html.parser import HTMLParser
+from pathlib import Path
 
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
@@ -104,6 +106,7 @@ class GmailConnector:
         cc: list[str] | None = None,
         bcc: list[str] | None = None,
         thread_id: str | None = None,
+        attachments: list[dict] | None = None,
     ) -> dict:
         message = self._build_raw_message(
             to=to,
@@ -111,6 +114,7 @@ class GmailConnector:
             body=body,
             cc=cc,
             bcc=bcc,
+            attachments=attachments,
         )
         draft_body = {"message": {"raw": message}}
         if thread_id:
@@ -128,6 +132,7 @@ class GmailConnector:
         cc: list[str] | None = None,
         bcc: list[str] | None = None,
         thread_id: str | None = None,
+        attachments: list[dict] | None = None,
     ) -> dict:
         message_body = {
             "raw": self._build_raw_message(
@@ -136,6 +141,7 @@ class GmailConnector:
                 body=body,
                 cc=cc,
                 bcc=bcc,
+                attachments=attachments,
             )
         }
         if thread_id:
@@ -145,6 +151,12 @@ class GmailConnector:
             body=message_body,
         ).execute()
 
+    def send_draft(self, draft_id: str) -> dict:
+        return self.gmail.users().drafts().send(
+            userId="me",
+            body={"id": draft_id},
+        ).execute()
+
     def _build_raw_message(
         self,
         to: list[str],
@@ -152,6 +164,7 @@ class GmailConnector:
         body: str,
         cc: list[str] | None = None,
         bcc: list[str] | None = None,
+        attachments: list[dict] | None = None,
     ) -> str:
         message = EmailMessage()
         message["To"] = ", ".join(to)
@@ -161,6 +174,21 @@ class GmailConnector:
             message["Bcc"] = ", ".join(bcc)
         message["Subject"] = subject
         message.set_content(body)
+        for attachment in attachments or []:
+            path = Path(attachment["local_path"])
+            filename = attachment.get("filename") or path.name
+            mime_type = (
+                attachment.get("mime_type")
+                or mimetypes.guess_type(filename)[0]
+                or "application/octet-stream"
+            )
+            maintype, subtype = mime_type.split("/", 1)
+            message.add_attachment(
+                path.read_bytes(),
+                maintype=maintype,
+                subtype=subtype,
+                filename=filename,
+            )
         return base64.urlsafe_b64encode(message.as_bytes()).decode()
 
     def list_history(

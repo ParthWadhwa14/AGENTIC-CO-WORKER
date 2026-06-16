@@ -43,7 +43,7 @@ Copy `ingestion/.env.example` to `.env`, then set:
 
 ```bash
 TOKEN_ENCRYPTION_KEY=...
-GOOGLE_API_KEY=...
+GROQ_API_KEY=...
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 ```
@@ -78,13 +78,13 @@ http://localhost:8000/docs
 
 ## 4.1. Agent Model
 
-The LangGraph agent uses `GOOGLE_API_KEY` through `langchain-google-genai`.
+The LangGraph agent uses `GROQ_API_KEY` through `langchain-groq`.
 
 Default models:
 
 ```bash
-GENERATION_MODEL=gemma-4-31b-it
-FALLBACK_GENERATION_MODEL=gemma-4-26b-a4b-it
+GENERATION_MODEL=openai/gpt-oss-120b
+FALLBACK_GENERATION_MODEL=openai/gpt-oss-20b
 ```
 
 Streaming is available at:

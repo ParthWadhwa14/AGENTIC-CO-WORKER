@@ -6,6 +6,12 @@ class GoogleSheetsConnector:
     def __init__(self, credentials: Credentials):
         self.sheets = build("sheets", "v4", credentials=credentials)
 
+    def get_spreadsheet(self, spreadsheet_id: str) -> dict:
+        return self.sheets.spreadsheets().get(
+            spreadsheetId=spreadsheet_id,
+            includeGridData=False,
+        ).execute()
+
     def get_values(self, spreadsheet_id: str, range_name: str) -> list[list[str]]:
         result = self.sheets.spreadsheets().values().get(
             spreadsheetId=spreadsheet_id,

@@ -636,12 +636,19 @@ class MetadataStore:
 
         return document_id
 
-    def list_documents(self, user_id: str, limit: int = 100) -> list[dict]:
+    def list_documents(
+        self,
+        user_id: str,
+        limit: int = 100,
+        include_deleted: bool = False,
+    ) -> list[dict]:
+        deleted_filter = "" if include_deleted else "AND index_status != 'deleted'"
         with self.connect() as connection:
             rows = connection.execute(
-                """
+                f"""
                 SELECT * FROM documents
                 WHERE user_id = ?
+                {deleted_filter}
                 ORDER BY created_at DESC
                 LIMIT ?
                 """,
@@ -649,6 +656,65 @@ class MetadataStore:
             ).fetchall()
 
         return [dict(row) for row in rows]
+
+    def cleanup_chat_indexed_documents(
+        self,
+        user_id: str,
+        keep_document_ids: list[str] | None = None,
+    ) -> list[dict]:
+        keep_document_ids = keep_document_ids or []
+        placeholders = ",".join("?" for _ in keep_document_ids)
+        keep_filter = f"AND id NOT IN ({placeholders})" if keep_document_ids else ""
+
+        with self.connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT * FROM documents
+                WHERE user_id = ?
+                  AND source != 'upload'
+                  AND index_status = 'indexed'
+                  {keep_filter}
+                """,
+                (user_id, *keep_document_ids),
+            ).fetchall()
+
+            documents = [dict(row) for row in rows]
+            if not documents:
+                return []
+
+            now = utc_now()
+            document_ids = [document["id"] for document in documents]
+            delete_placeholders = ",".join("?" for _ in document_ids)
+            connection.execute(
+                f"""
+                UPDATE documents
+                SET index_status = 'deleted', updated_at = ?
+                WHERE user_id = ? AND id IN ({delete_placeholders})
+                """,
+                (now, user_id, *document_ids),
+            )
+            connection.execute(
+                f"""
+                UPDATE gmail_messages
+                SET deleted_at = ?, updated_at = ?
+                WHERE user_id = ? AND document_id IN ({delete_placeholders})
+                """,
+                (now, now, user_id, *document_ids),
+            )
+
+        for document in documents:
+            local_path = document.get("local_path")
+            if not local_path:
+                continue
+            try:
+                path = Path(local_path)
+                if path.is_file():
+                    path.unlink()
+                    document["local_file_deleted"] = True
+            except Exception as exc:
+                document["local_file_error"] = str(exc)
+
+        return documents
 
     def connection_status(self, user_id: str) -> dict:
         accounts = self.list_connected_accounts()

@@ -16,6 +16,7 @@ class AgentRequest(BaseModel):
     mode: str = Field(default="workspace", pattern="^(workspace|basic)$")
     use_web_search: bool = True
     pinned_document_ids: list[str] = Field(default_factory=list)
+    priority_document_ids: list[str] = Field(default_factory=list)
     source_type: str | None = None
     limit: int = Field(default=8, ge=1, le=20)
 
@@ -45,6 +46,7 @@ def ask_agent(request: AgentRequest):
             mode=request.mode,
             use_web_search=request.use_web_search,
             pinned_document_ids=request.pinned_document_ids,
+            priority_document_ids=request.priority_document_ids,
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc

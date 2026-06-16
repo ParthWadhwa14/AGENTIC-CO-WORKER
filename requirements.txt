@@ -4,7 +4,7 @@ langchain_community
 dotenv
 langchain_qdrant
 langgraph 
-langchain-google-genai
+langchain-groq
 fastapi
 uvicorn
 python-multipart

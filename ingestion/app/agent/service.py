@@ -6,7 +6,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from app.agent.graph import agent_graph
 from app.agent.llm import stream_with_fallback
 from app.agent.llm import invoke_with_fallback
-from app.agent.prompts import BASIC_CHAT_PROMPT, FORMATTER_PROMPT
+from app.agent.prompts import BASIC_CHAT_PROMPT, FORMATTER_PROMPT, MEMORY_EXTRACTION_PROMPT
 from app.agent.state import AgentState
 from app.services.runtime_context import runtime_context, runtime_context_text
 from app.services.web_search import serper_search, should_search_web
@@ -54,6 +54,66 @@ def _profile_text(profile: dict) -> str:
     ).strip()
 
 
+def _parse_json_object(raw: str) -> dict:
+    cleaned = raw.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.strip("`")
+        cleaned = cleaned.removeprefix("json").strip()
+    return json.loads(cleaned)
+
+
+def _user_messages_for_memory(
+    query: str,
+    conversation_history: list[dict[str, str]] | None = None,
+) -> list[str]:
+    messages = [
+        (message.get("content") or "").strip()
+        for message in conversation_history or []
+        if message.get("role") == "user" and (message.get("content") or "").strip()
+    ]
+    if query.strip():
+        messages.append(query.strip())
+    return messages
+
+
+def _profile_with_chat_memory(
+    metadata_store: MetadataStore,
+    user_id: str,
+    profile: dict,
+    query: str,
+    conversation_history: list[dict[str, str]] | None = None,
+) -> dict:
+    user_messages = _user_messages_for_memory(query, conversation_history)
+    if not user_messages:
+        return profile
+
+    memory_input = {
+        "existing_user_context": profile.get("user_context") or "",
+        "user_messages": user_messages,
+    }
+    try:
+        raw = invoke_with_fallback(
+            [
+                SystemMessage(content=MEMORY_EXTRACTION_PROMPT),
+                HumanMessage(content=json.dumps(memory_input)),
+            ]
+        )
+        parsed = _parse_json_object(raw)
+        user_context = (parsed.get("user_context") or "").strip()
+    except Exception:
+        return profile
+
+    if not user_context or user_context == (profile.get("user_context") or "").strip():
+        return profile
+
+    return metadata_store.upsert_agent_profile(
+        user_id=user_id,
+        agent_description=profile.get("agent_description") or "",
+        user_context=user_context,
+        response_preferences=profile.get("response_preferences") or "",
+    )
+
+
 def run_basic_chat(
     user_id: str,
     query: str,
@@ -62,6 +122,13 @@ def run_basic_chat(
 ) -> dict:
     metadata_store = MetadataStore()
     profile = metadata_store.get_agent_profile(user_id)
+    profile = _profile_with_chat_memory(
+        metadata_store,
+        user_id,
+        profile,
+        query,
+        conversation_history,
+    )
     history = _history_text(conversation_history or [])
     web_results = []
     if use_web_search and should_search_web(query):
@@ -136,6 +203,7 @@ def run_agent(
     mode: str = "workspace",
     use_web_search: bool = True,
     pinned_document_ids: list[str] | None = None,
+    priority_document_ids: list[str] | None = None,
 ) -> dict:
     if mode == "basic":
         return run_basic_chat(
@@ -145,7 +213,15 @@ def run_agent(
             use_web_search=use_web_search,
         )
 
-    profile = MetadataStore().get_agent_profile(user_id)
+    metadata_store = MetadataStore()
+    profile = metadata_store.get_agent_profile(user_id)
+    profile = _profile_with_chat_memory(
+        metadata_store,
+        user_id,
+        profile,
+        query,
+        conversation_history,
+    )
     current_context = runtime_context()
     web_results = []
     if use_web_search and should_search_web(query):
@@ -161,6 +237,8 @@ def run_agent(
         runtime_context=current_context,
         web_results=web_results,
         pinned_document_ids=pinned_document_ids or [],
+        priority_document_ids=priority_document_ids or [],
+        allow_web_search=use_web_search,
         requested_source_type=source_type,
         limit=limit,
     )

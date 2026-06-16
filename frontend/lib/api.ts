@@ -52,6 +52,22 @@ export async function getDocuments(userId: string) {
   return request(`/documents?user_id=${encodeURIComponent(userId)}`);
 }
 
+export async function cleanupChatDocuments(
+  userId: string,
+  keepDocumentIds: string[] = []
+) {
+  return request("/documents/cleanup-chat", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      user_id: userId,
+      keep_document_ids: keepDocumentIds
+    })
+  });
+}
+
 export async function syncDrive(userId: string, mode = "incremental") {
   return request(`/drive/sync?user_id=${encodeURIComponent(userId)}&mode=${mode}`, {
     method: "POST"
@@ -79,7 +95,8 @@ export async function askAgent(
   history: ChatHistoryMessage[] = [],
   mode: "workspace" | "basic" = "workspace",
   useWebSearch = true,
-  pinnedDocumentIds: string[] = []
+  pinnedDocumentIds: string[] = [],
+  priorityDocumentIds: string[] = []
 ) {
   return request("/agent/ask", {
     method: "POST",
@@ -93,6 +110,7 @@ export async function askAgent(
       mode,
       use_web_search: useWebSearch,
       pinned_document_ids: pinnedDocumentIds,
+      priority_document_ids: priorityDocumentIds,
       limit: 8
     })
   });

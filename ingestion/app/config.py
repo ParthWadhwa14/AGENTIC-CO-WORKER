@@ -33,6 +33,22 @@ def ensure_google_scopes(scopes: list[str], required: list[str]) -> list[str]:
     return normalize_google_scopes(scopes + required)
 
 
+DEFAULT_GENERATION_MODEL = "openai/gpt-oss-120b"
+DEFAULT_FALLBACK_GENERATION_MODEL = "openai/gpt-oss-20b"
+LEGACY_GOOGLE_MODEL_PREFIXES = ("gem",)
+
+
+def generation_model_from_env(
+    env_name: str,
+    default: str,
+    fallback_for_legacy: str,
+) -> str:
+    model = os.getenv(env_name, default).strip()
+    if not model or model.startswith(LEGACY_GOOGLE_MODEL_PREFIXES):
+        return fallback_for_legacy
+    return model
+
+
 GOOGLE_DEFAULT_BASE_SCOPES = [
     "openid",
     "https://www.googleapis.com/auth/userinfo.email",
@@ -74,15 +90,24 @@ class Settings:
         "EMBEDDING_MODEL",
         "BAAI/bge-small-en-v1.5"
     )
-    GOOGLE_API_KEY: str | None = os.getenv("GOOGLE_API_KEY")
+    GROQ_API_KEY: str | None = os.getenv("GROQ_API_KEY")
     SERPER_API_KEY: str | None = os.getenv("SERPER_API_KEY")
     DEFAULT_REGION: str = os.getenv("DEFAULT_REGION", "India")
     DEFAULT_TIMEZONE: str = os.getenv("DEFAULT_TIMEZONE", "Asia/Kolkata")
-    GENERATION_MODEL: str = os.getenv("GENERATION_MODEL", "gemma-4-31b-it")
-    FALLBACK_GENERATION_MODEL: str = os.getenv(
-        "FALLBACK_GENERATION_MODEL",
-        "gemma-4-26b-a4b-it",
+    GENERATION_MODEL: str = generation_model_from_env(
+        "GENERATION_MODEL",
+        DEFAULT_GENERATION_MODEL,
+        DEFAULT_GENERATION_MODEL,
     )
+    FALLBACK_GENERATION_MODEL: str = generation_model_from_env(
+        "FALLBACK_GENERATION_MODEL",
+        DEFAULT_FALLBACK_GENERATION_MODEL,
+        DEFAULT_FALLBACK_GENERATION_MODEL,
+    )
+    GROQ_CONTEXT_CHAR_LIMIT: int = int(
+        os.getenv("GROQ_CONTEXT_CHAR_LIMIT", "70000")
+    )
+    GROQ_MAX_OUTPUT_TOKENS: int = int(os.getenv("GROQ_MAX_OUTPUT_TOKENS", "4096"))
     GENERATION_TEMPERATURE: float = float(
         os.getenv("GENERATION_TEMPERATURE", "0.2")
     )

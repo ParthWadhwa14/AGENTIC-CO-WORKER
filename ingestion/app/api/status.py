@@ -1,12 +1,19 @@
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, Field
 from qdrant_client import QdrantClient
 
 from app.config import settings
+from app.qdrant_store import QdrantStore
 from app.services.runtime_context import runtime_context
 from app.storage.metadata_store import MetadataStore
 
 
 router = APIRouter(tags=["status"])
+
+
+class CleanupDocumentsRequest(BaseModel):
+    user_id: str
+    keep_document_ids: list[str] = Field(default_factory=list)
 
 
 @router.get("/setup/status")
@@ -38,7 +45,7 @@ def setup_status():
             or settings.GOOGLE_CLIENT_SECRETS_FILE
             or (settings.GOOGLE_CLIENT_ID and settings.GOOGLE_CLIENT_SECRET)
         ),
-        "google_api_key_configured": bool(settings.GOOGLE_API_KEY),
+        "groq_api_key_configured": bool(settings.GROQ_API_KEY),
         "serper_api_key_configured": bool(settings.SERPER_API_KEY),
         "token_encryption_configured": bool(settings.TOKEN_ENCRYPTION_KEY),
         "frontend_url": settings.FRONTEND_URL,
@@ -62,10 +69,58 @@ def get_document(document_id: str):
 def list_documents(
     user_id: str = Query(...),
     limit: int = Query(100, ge=1, le=500),
+    include_deleted: bool = Query(False),
 ):
     return {
         "user_id": user_id,
-        "documents": MetadataStore().list_documents(user_id, limit=limit),
+        "documents": MetadataStore().list_documents(
+            user_id,
+            limit=limit,
+            include_deleted=include_deleted,
+        ),
+    }
+
+
+@router.post("/documents/cleanup-chat")
+def cleanup_chat_documents(request: CleanupDocumentsRequest):
+    metadata_store = MetadataStore()
+    documents = metadata_store.cleanup_chat_indexed_documents(
+        user_id=request.user_id,
+        keep_document_ids=request.keep_document_ids,
+    )
+    qdrant_errors = []
+    if documents:
+        qdrant = QdrantStore()
+        for document in documents:
+            try:
+                qdrant.delete_document_chunks(document["id"])
+            except Exception as exc:
+                qdrant_errors.append(
+                    {
+                        "document_id": document["id"],
+                        "error": str(exc),
+                    }
+                )
+
+    return {
+        "user_id": request.user_id,
+        "deleted_count": len(documents),
+        "deleted_document_ids": [document["id"] for document in documents],
+        "deleted_local_files": [
+            document["local_path"]
+            for document in documents
+            if document.get("local_file_deleted")
+        ],
+        "local_file_errors": [
+            {
+                "document_id": document["id"],
+                "error": document["local_file_error"],
+            }
+            for document in documents
+            if document.get("local_file_error")
+        ],
+        "preserved_document_ids": request.keep_document_ids,
+        "qdrant_errors": qdrant_errors,
     }
 
 

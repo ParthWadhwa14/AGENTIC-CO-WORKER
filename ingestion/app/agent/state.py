@@ -49,8 +49,12 @@ class AgentState(BaseModel):
     runtime_context: dict[str, Any] = Field(default_factory=dict)
     web_results: list[dict[str, Any]] = Field(default_factory=list)
     pinned_document_ids: list[str] = Field(default_factory=list)
+    priority_document_ids: list[str] = Field(default_factory=list)
+    allow_web_search: bool = True
     limit: int = 8
     requested_source_type: str | None = None
+    max_retrieval_attempts: int = 2
+    retrieval_attempts: int = 0
 
     intent: IntentType = "unknown"
     sources_needed: list[str] = Field(default_factory=list)

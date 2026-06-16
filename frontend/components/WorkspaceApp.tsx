@@ -25,6 +25,7 @@ import {
   backendUrl,
   type ChatHistoryMessage,
   agentIngestDefaultScope,
+  cleanupChatDocuments,
   executeAgentAction,
   getAgentProfile,
   getConnectionStatus,
@@ -57,6 +58,7 @@ type ChatTurn = {
   id: string;
   role: "user" | "assistant";
   content: string;
+  actionMemory?: string;
   references?: Reference[];
   proposedAction?: ProposedAction;
   pending?: boolean;
@@ -327,10 +329,11 @@ function uniqueDocumentReferences(references: Reference[] = []) {
 function chatHistoryFromTurns(turns: ChatTurn[]): ChatHistoryMessage[] {
   return turns
     .filter((turn) => !turn.pending && !turn.error && turn.content.trim())
-    .slice(-8)
     .map((turn) => ({
       role: turn.role,
-      content: turn.content
+      content: turn.actionMemory
+        ? `${turn.content}\n\n${turn.actionMemory}`
+        : turn.content
     }));
 }
 
@@ -341,6 +344,23 @@ function referenceKey(reference: Reference) {
     reference.file_name ||
     reference.title
   );
+}
+
+function actionExecutionMemory(action: ProposedAction, result: any) {
+  const memory = {
+    type: "action_execution_result",
+    action_type: result.action_type || action.action_type,
+    payload: result.payload || action.payload,
+    result: result.result || result
+  };
+  return {
+    display: `**Executed:** ${memory.action_type} completed successfully.`,
+    memory: [
+      "```json action-memory",
+      JSON.stringify(memory, null, 2),
+      "```"
+    ].join("\n")
+  };
 }
 
 export function WorkspaceApp({ session }: WorkspaceAppProps) {
@@ -367,6 +387,10 @@ export function WorkspaceApp({ session }: WorkspaceAppProps) {
   const [scopeResources, setScopeResources] = useState<ScopeResource[]>([]);
   const [latestReferences, setLatestReferences] = useState<Reference[]>([]);
   const [pinnedReferences, setPinnedReferences] = useState<Reference[]>([]);
+  const [priorityDocumentIds, setPriorityDocumentIds] = useState<string[]>([]);
+  const [persistentPriorityDocumentIds, setPersistentPriorityDocumentIds] = useState<string[]>([]);
+  const [persistentPriorityLoaded, setPersistentPriorityLoaded] = useState(false);
+  const [knownDocumentIds, setKnownDocumentIds] = useState<string[]>([]);
   const [busy, setBusy] = useState("");
   const [activity, setActivity] = useState("");
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -377,6 +401,7 @@ export function WorkspaceApp({ session }: WorkspaceAppProps) {
   const userName =
     session.user.user_metadata?.full_name || session.user.email || "User";
   const chatStorageKey = `workspace-agent-chat:${session.user.id}`;
+  const persistentPriorityStorageKey = `workspace-agent-persistent-priority:${session.user.id}`;
 
   function pushToast(
     title: string,
@@ -600,18 +625,44 @@ export function WorkspaceApp({ session }: WorkspaceAppProps) {
     });
   }
 
+  function togglePriorityDocument(documentId: string) {
+    setPriorityDocumentIds((current) => {
+      if (current.includes(documentId)) {
+        setPersistentPriorityDocumentIds((persistent) =>
+          persistent.filter((id) => id !== documentId)
+        );
+        return current.filter((id) => id !== documentId);
+      }
+      return [...current, documentId];
+    });
+  }
+
+  function togglePersistentPriorityDocument(documentId: string) {
+    setPersistentPriorityDocumentIds((current) => {
+      if (current.includes(documentId)) {
+        return current.filter((id) => id !== documentId);
+      }
+      setPriorityDocumentIds((priority) =>
+        priority.includes(documentId) ? priority : [...priority, documentId]
+      );
+      return [...current, documentId];
+    });
+  }
+
   async function approveAction(turnId: string, action: ProposedAction) {
     setBusy(`action-${turnId}`);
     setActivity("Executing approved action...");
     try {
       const result = await executeAgentAction(session.user.id, action);
+      const executionMemory = actionExecutionMemory(action, result);
       setChatTurns((current) =>
         current.map((turn) =>
           turn.id === turnId
             ? {
                 ...turn,
                 executed: true,
-                content: `${turn.content}\n\n**Executed:** ${result.action_type} completed successfully.`
+                content: `${turn.content}\n\n${executionMemory.display}`,
+                actionMemory: executionMemory.memory
               }
             : turn
         )
@@ -621,6 +672,36 @@ export function WorkspaceApp({ session }: WorkspaceAppProps) {
       pushToast(
         "Action blocked",
         error instanceof Error ? error.message : "Could not execute action",
+        "error"
+      );
+    } finally {
+      setBusy("");
+      setActivity("");
+    }
+  }
+
+  async function clearChatAndCleanup() {
+    const keepDocumentIds = Array.from(new Set(persistentPriorityDocumentIds));
+    setChatTurns([]);
+    setLatestReferences([]);
+    setPinnedReferences([]);
+    setPriorityDocumentIds(keepDocumentIds);
+    setBusy("clear-chat");
+    setActivity("Clearing chat and pruning temporary indexed documents...");
+    try {
+      const result = await cleanupChatDocuments(session.user.id, keepDocumentIds);
+      pushToast(
+        "Chat cleared",
+        result.deleted_count
+          ? `Deleted ${result.deleted_count} temporary indexed document(s).`
+          : "No temporary indexed documents needed cleanup.",
+        "success"
+      );
+      await refresh();
+    } catch (error) {
+      pushToast(
+        "Cleanup failed",
+        error instanceof Error ? error.message : "Could not delete temporary documents",
         "error"
       );
     } finally {
@@ -650,6 +731,9 @@ export function WorkspaceApp({ session }: WorkspaceAppProps) {
     const pinnedDocumentIds = pinnedReferences
       .map((reference) => reference.document_id)
       .filter((id): id is string => Boolean(id));
+    const selectedPriorityDocumentIds = Array.from(
+      new Set([...priorityDocumentIds, ...persistentPriorityDocumentIds])
+    );
     setChatTurns((current) => [...current, userTurn, assistantTurn]);
     setQuery("");
     setBusy("agent");
@@ -664,8 +748,9 @@ export function WorkspaceApp({ session }: WorkspaceAppProps) {
         question,
         history,
         chatMode,
-        chatMode === "basic" && useWebSearch,
-        pinnedDocumentIds
+        useWebSearch,
+        pinnedDocumentIds,
+        selectedPriorityDocumentIds
       );
       const answerReferences = uniqueDocumentReferences(result.references || []);
       setLatestReferences(answerReferences);
@@ -735,9 +820,52 @@ export function WorkspaceApp({ session }: WorkspaceAppProps) {
   }, [chatStorageKey]);
 
   useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(persistentPriorityStorageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved) as string[];
+        setPersistentPriorityDocumentIds(parsed.filter(Boolean));
+        setPriorityDocumentIds((current) =>
+          Array.from(new Set([...current, ...parsed.filter(Boolean)]))
+        );
+      }
+    } catch {
+      window.localStorage.removeItem(persistentPriorityStorageKey);
+    } finally {
+      setPersistentPriorityLoaded(true);
+    }
+  }, [persistentPriorityStorageKey]);
+
+  useEffect(() => {
     if (!chatLoaded) return;
     window.localStorage.setItem(chatStorageKey, JSON.stringify(chatTurns));
   }, [chatLoaded, chatStorageKey, chatTurns]);
+
+  useEffect(() => {
+    if (!persistentPriorityLoaded) return;
+    window.localStorage.setItem(
+      persistentPriorityStorageKey,
+      JSON.stringify(persistentPriorityDocumentIds)
+    );
+  }, [
+    persistentPriorityDocumentIds,
+    persistentPriorityLoaded,
+    persistentPriorityStorageKey
+  ]);
+
+  useEffect(() => {
+    const indexedIds = documents
+      .filter((document) => document.index_status === "indexed")
+      .map((document) => document.id)
+      .filter(Boolean);
+    const newIndexedIds = indexedIds.filter((id) => !knownDocumentIds.includes(id));
+    if (!newIndexedIds.length) return;
+
+    setPriorityDocumentIds((current) =>
+      Array.from(new Set([...current, ...newIndexedIds]))
+    );
+    setKnownDocumentIds((current) => Array.from(new Set([...current, ...indexedIds])));
+  }, [documents, knownDocumentIds]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -905,8 +1033,8 @@ export function WorkspaceApp({ session }: WorkspaceAppProps) {
               <h2 className="font-bold">Retrieved sources</h2>
             </div>
             <p className="mt-2 text-xs leading-5 text-[var(--muted)]">
-              Sources are used for the current answer only. Check a source to keep
-              it for future messages.
+              Sources are used for the current answer only. Check a source to
+              prioritize it for this chat.
             </p>
             <div className="mt-3 space-y-2">
               {latestReferences.length ? (
@@ -978,7 +1106,7 @@ export function WorkspaceApp({ session }: WorkspaceAppProps) {
                 ))
               ) : (
                 <p className="text-sm text-[var(--muted)]">
-                  Check a retrieved document to reuse it.
+                  Check a retrieved document to prioritize it until chat is cleared.
                 </p>
               )}
             </div>
@@ -1197,11 +1325,10 @@ export function WorkspaceApp({ session }: WorkspaceAppProps) {
             <label className="flex items-center gap-2 text-sm text-[var(--muted)]">
               <input
                 checked={useWebSearch}
-                disabled={chatMode !== "basic"}
                 onChange={(event) => setUseWebSearch(event.target.checked)}
                 type="checkbox"
               />
-              Web search {setup?.serper_api_key_configured ? "ready" : "not configured"}
+              Allow web expansion {setup?.serper_api_key_configured ? "ready" : "not configured"}
             </label>
           </div>
 
@@ -1220,9 +1347,9 @@ export function WorkspaceApp({ session }: WorkspaceAppProps) {
             </div>
           ) : null}
 
-          {setup && !setup.google_api_key_configured ? (
+          {setup && !setup.groq_api_key_configured ? (
             <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-              Chat generation needs <code>GOOGLE_API_KEY</code> in the backend
+              Chat generation needs <code>GROQ_API_KEY</code> in the backend
               environment, then restart the backend.
             </div>
           ) : null}
@@ -1247,9 +1374,9 @@ export function WorkspaceApp({ session }: WorkspaceAppProps) {
               <button
                 className="btn ghost text-sm"
                 disabled={Boolean(busy)}
-                onClick={() => setChatTurns([])}
+                onClick={clearChatAndCleanup}
               >
-                Clear chat
+                {busy === "clear-chat" ? "Clearing..." : "Clear chat"}
               </button>
             ) : null}
           </div>
@@ -1387,14 +1514,48 @@ export function WorkspaceApp({ session }: WorkspaceAppProps) {
               </p>
             ) : null}
             <div className="mt-3 space-y-2">
-              {documents.slice(0, 8).map((document) => (
-                <div className="rounded-lg border border-[var(--border)] p-3 text-sm" key={document.id}>
-                  <p className="truncate font-bold">{document.file_name}</p>
-                  <p className="text-xs text-[var(--muted)]">
-                    {document.source} · {document.index_status}
-                  </p>
-                </div>
-              ))}
+              {documents.map((document) => {
+                const canPrioritize = document.index_status === "indexed";
+                const priorityChecked =
+                  priorityDocumentIds.includes(document.id) ||
+                  persistentPriorityDocumentIds.includes(document.id);
+                const persistentChecked = persistentPriorityDocumentIds.includes(
+                  document.id
+                );
+                return (
+                  <div
+                    className="rounded-lg border border-[var(--border)] p-3 text-sm"
+                    key={document.id}
+                  >
+                    <p className="truncate font-bold">{document.file_name}</p>
+                    <p className="text-xs text-[var(--muted)]">
+                      {document.source} · {document.index_status}
+                    </p>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-[var(--muted)]">
+                      <label className="flex items-center gap-2">
+                        <input
+                          checked={priorityChecked}
+                          disabled={!canPrioritize}
+                          onChange={() => togglePriorityDocument(document.id)}
+                          type="checkbox"
+                        />
+                        Use now
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input
+                          checked={persistentChecked}
+                          disabled={!canPrioritize}
+                          onChange={() =>
+                            togglePersistentPriorityDocument(document.id)
+                          }
+                          type="checkbox"
+                        />
+                        Keep
+                      </label>
+                    </div>
+                  </div>
+                );
+              })}
               {!documents.length ? (
                 <p className="text-sm text-[var(--muted)]">
                   Upload or sync sources to see documents.

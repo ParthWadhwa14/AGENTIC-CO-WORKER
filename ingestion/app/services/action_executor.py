@@ -1,5 +1,6 @@
 import re
 from typing import Any
+from pathlib import Path
 
 from app.connectors.gmail_connector import GmailConnector
 from app.connectors.google_docs import GoogleDocsConnector
@@ -24,6 +25,8 @@ MAX_EMAIL_RECIPIENTS = 10
 MAX_EMAIL_BODY_CHARS = 12000
 MAX_DOC_TEXT_CHARS = 50000
 MAX_SHEET_CELLS = 500
+MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
+MAX_ATTACHMENTS = 5
 
 
 class ActionGuardrailError(ValueError):
@@ -67,6 +70,36 @@ def _validate_recipients(payload: dict) -> tuple[list[str], list[str], list[str]
     return to, cc, bcc
 
 
+def _validate_attachments(payload: dict) -> list[dict]:
+    attachments = payload.get("attachments") or []
+    if not isinstance(attachments, list):
+        raise ActionGuardrailError("Attachments must be a list.")
+    if len(attachments) > MAX_ATTACHMENTS:
+        raise ActionGuardrailError(f"Too many attachments. Limit is {MAX_ATTACHMENTS}.")
+
+    validated = []
+    for attachment in attachments:
+        if not isinstance(attachment, dict):
+            raise ActionGuardrailError("Attachment entries must be objects.")
+        local_path = attachment.get("local_path")
+        if not isinstance(local_path, str) or not local_path.strip():
+            raise ActionGuardrailError("Attachment is missing local_path.")
+        path = Path(local_path)
+        if not path.is_file():
+            raise ActionGuardrailError(f"Attachment file not found: {path.name}")
+        if path.stat().st_size > MAX_ATTACHMENT_BYTES:
+            raise ActionGuardrailError(f"Attachment is too large: {path.name}")
+        validated.append(
+            {
+                "document_id": attachment.get("document_id"),
+                "local_path": str(path),
+                "filename": attachment.get("filename") or path.name,
+                "mime_type": attachment.get("mime_type") or "application/octet-stream",
+            }
+        )
+    return validated
+
+
 def _validate_sheet_values(values: Any) -> list[list[str]]:
     if not isinstance(values, list) or not values:
         raise ActionGuardrailError("Sheet values must be a non-empty 2D array.")
@@ -92,7 +125,21 @@ def validate_action(action: dict) -> dict:
         raise ActionGuardrailError("Action payload must be an object.")
 
     if action_type in {"create_gmail_draft", "send_gmail"}:
+        draft_id = payload.get("draft_id")
+        if action_type == "send_gmail" and isinstance(draft_id, str) and draft_id.strip():
+            return {
+                **action,
+                "payload": {
+                    **payload,
+                    "draft_id": draft_id.strip(),
+                },
+            }
         to, cc, bcc = _validate_recipients(payload)
+        attachments = _validate_attachments(payload)
+        if payload.get("attachments_required") and not attachments:
+            raise ActionGuardrailError(
+                "Requested attachment could not be resolved to an uploaded local file."
+            )
         return {
             **action,
             "payload": {
@@ -106,6 +153,7 @@ def validate_action(action: dict) -> dict:
                     "body",
                     max_length=MAX_EMAIL_BODY_CHARS,
                 ),
+                "attachments": attachments,
             },
         }
 
@@ -192,21 +240,31 @@ def execute_action(user_id: str, action: dict) -> dict:
                 subject=payload["subject"],
                 body=payload["body"],
                 thread_id=payload.get("thread_id"),
+                attachments=payload.get("attachments"),
             )
         else:
-            result = gmail.send_message(
-                to=payload["to"],
-                cc=payload.get("cc"),
-                bcc=payload.get("bcc"),
-                subject=payload["subject"],
-                body=payload["body"],
-                thread_id=payload.get("thread_id"),
-            )
+            if payload.get("draft_id"):
+                result = gmail.send_draft(payload["draft_id"])
+            else:
+                result = gmail.send_message(
+                    to=payload["to"],
+                    cc=payload.get("cc"),
+                    bcc=payload.get("bcc"),
+                    subject=payload["subject"],
+                    body=payload["body"],
+                    thread_id=payload.get("thread_id"),
+                    attachments=payload.get("attachments"),
+                )
         if action_type == "create_gmail_draft" and not result.get("id"):
             raise ActionGuardrailError("Gmail draft API did not return a draft id.")
         if action_type == "send_gmail" and not result.get("id"):
             raise ActionGuardrailError("Gmail send API did not return a sent message id.")
-        return {"status": "executed", "action_type": action_type, "result": result}
+        return {
+            "status": "executed",
+            "action_type": action_type,
+            "payload": payload,
+            "result": result,
+        }
 
     if action_type in {"create_google_doc", "update_google_doc"}:
         docs = GoogleDocsConnector(
@@ -217,6 +275,9 @@ def execute_action(user_id: str, action: dict) -> dict:
             if not document.get("documentId"):
                 raise ActionGuardrailError("Google Docs API did not return a document id.")
             docs.insert_text(document["documentId"], payload["text"])
+            document["documentUrl"] = (
+                f"https://docs.google.com/document/d/{document['documentId']}/edit"
+            )
             result = document
         elif payload["operation"] == "append_text":
             result = docs.append_text(payload["document_id"], payload["text"])
@@ -226,7 +287,12 @@ def execute_action(user_id: str, action: dict) -> dict:
                 contains_text=payload["contains_text"],
                 replace_text=payload["replace_text"],
             )
-        return {"status": "executed", "action_type": action_type, "result": result}
+        return {
+            "status": "executed",
+            "action_type": action_type,
+            "payload": payload,
+            "result": result,
+        }
 
     if action_type in {"create_google_sheet", "update_google_sheet"}:
         sheets = GoogleSheetsConnector(
@@ -258,6 +324,11 @@ def execute_action(user_id: str, action: dict) -> dict:
             result.get("updatedCells") or result.get("updates", {}).get("updatedCells")
         ):
             raise ActionGuardrailError("Google Sheets API did not report updated cells.")
-        return {"status": "executed", "action_type": action_type, "result": result}
+        return {
+            "status": "executed",
+            "action_type": action_type,
+            "payload": payload,
+            "result": result,
+        }
 
     raise ActionGuardrailError("Unsupported action.")
