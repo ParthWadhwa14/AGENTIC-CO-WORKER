@@ -13,10 +13,10 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
 NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
 ```
 
-For Vercel, set `NEXT_PUBLIC_BACKEND_URL` to the Railway backend URL, for
-example `https://your-backend.up.railway.app`. Do not set it to the Vercel
-frontend URL, or backend calls such as `/setup/status` will return the Next.js
-404 page.
+For Vercel, set `NEXT_PUBLIC_BACKEND_URL` to the Railway backend URL:
+`https://agentic-co-worker-production.up.railway.app`. Do not set it to the
+Vercel frontend URL, or backend calls such as `/setup/status` will return the
+Next.js 404 page.
 
 In Supabase Auth, enable at least one login provider:
 

@@ -398,6 +398,8 @@ GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 GOOGLE_OAUTH_REDIRECT_URI=http://localhost:8000/auth/google/callback
 FRONTEND_URL=http://localhost:3000
+# Railway production:
+# FRONTEND_URL=https://agentic-co-worker.vercel.app
 
 SERPER_API_KEY=your_serper_key_optional
 ```
@@ -492,9 +494,9 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_or_publishable_key
 NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
 ```
 
-For Vercel, set `NEXT_PUBLIC_BACKEND_URL` to the Railway backend URL, for
-example `https://your-backend.up.railway.app`. Do not set it to the Vercel
-frontend URL.
+For Vercel, set `NEXT_PUBLIC_BACKEND_URL` to the Railway backend URL:
+`https://agentic-co-worker-production.up.railway.app`. Do not set it to the
+Vercel frontend URL.
 
 ### 9. Install And Run The Frontend
 

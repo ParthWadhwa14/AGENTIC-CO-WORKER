@@ -17,10 +17,17 @@ from app.storage.metadata_store import MetadataStore
 
 app = FastAPI(title="Personal Workspace Ingestion API")
 
-allowed_origins = [
-    "http://localhost:3000",
-    settings.FRONTEND_URL,
-]
+allowed_origins = list(
+    dict.fromkeys(
+        origin.rstrip("/")
+        for origin in [
+            "http://localhost:3000",
+            "https://agentic-co-worker.vercel.app",
+            settings.FRONTEND_URL,
+        ]
+        if origin
+    )
+)
 
 app.add_middleware(
     CORSMiddleware,
