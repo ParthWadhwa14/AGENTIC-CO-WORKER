@@ -1,0 +1,21 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+
+  redis:
+    image: redis:7-alpine
+    container_name: workspace_agent_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_storage:/data
+
+volumes:
+  qdrant_storage:
+  redis_storage:

@@ -1,0 +1,96 @@
+# macOS / editor noise
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+ingestion/.env
+ingestion/.env.*
+!ingestion/.env.example
+*.pem
+*.key
+*.crt
+client_secret*.json
+credentials*.json
+token*.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+ENV/
+
+# Jupyter / notebooks runtime
+.ipynb_checkpoints/
+
+# Node / Next.js
+node_modules/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/dist/
+frontend/build/
+frontend/.turbo/
+frontend/tsconfig.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Local databases and generated state
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+ingestion/app.db
+ingestion/ingestion/app.db
+qdrant_storage/
+redis_data/
+
+# Uploaded, synced, and generated user data
+uploaded_files/
+ingestion/uploaded_files/
+ingestion/ingestion/uploaded_files/
+synced_drive_files/
+ingestion/synced_drive_files/
+ingestion/ingestion/synced_drive_files/
+sample_outputs/
+
+# Logs and runtime files
+*.log
+logs/
+tmp/
+temp/
+.cache/
+
+# Docker/local compose overrides
+docker-compose.override.yml
+compose.override.yml
+
+# Archives and large local bundles
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
