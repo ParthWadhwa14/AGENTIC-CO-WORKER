@@ -11,14 +11,20 @@ from app.api.sources import router as sources_router
 from app.api.status import router as status_router
 from app.api.sync import router as sync_router
 from app.api.upload import router as upload_router
+from app.config import settings
 from app.storage.metadata_store import MetadataStore
 
 
 app = FastAPI(title="Personal Workspace Ingestion API")
 
+allowed_origins = [
+    "http://localhost:3000",
+    settings.FRONTEND_URL,
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
