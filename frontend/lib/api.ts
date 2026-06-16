@@ -1,10 +1,26 @@
 import type { Session } from "@supabase/supabase-js";
 
-export const backendUrl =
-  process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:8000";
+const configuredBackendUrl =
+  process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/+$/, "") || "";
+
+export const backendUrl = configuredBackendUrl;
+
+function backendPath(path: string) {
+  return `${backendUrl}${path}`;
+}
+
+function backendOrigin() {
+  if (backendUrl) {
+    return backendUrl;
+  }
+  if (typeof window !== "undefined") {
+    return window.location.origin;
+  }
+  return "http://localhost:3000";
+}
 
 async function request(path: string, options: RequestInit = {}) {
-  const response = await fetch(`${backendUrl}${path}`, {
+  const response = await fetch(backendPath(path), {
     ...options,
     headers: {
       ...(options.headers || {})
@@ -14,11 +30,22 @@ async function request(path: string, options: RequestInit = {}) {
   if (!response.ok) {
     const message = await response.text();
     let detail = message;
-    try {
-      const parsed = JSON.parse(message);
-      detail = parsed.detail || parsed.message || message;
-    } catch {
-      detail = message;
+    const contentType = response.headers.get("content-type") || "";
+    if (
+      contentType.includes("text/html") ||
+      message.trimStart().startsWith("<!DOCTYPE html")
+    ) {
+      detail = [
+        `Backend endpoint ${path} returned an HTML ${response.status} page.`,
+        "Check that NEXT_PUBLIC_BACKEND_URL points to your Railway backend URL, not your Vercel frontend URL."
+      ].join(" ");
+    } else {
+      try {
+        const parsed = JSON.parse(message);
+        detail = parsed.detail || parsed.message || message;
+      } catch {
+        detail = message;
+      }
     }
     throw new Error(detail || `Request failed: ${response.status}`);
   }
@@ -35,7 +62,7 @@ export function googleConnectUrl(
   service: "drive" | "gmail" | "workspace",
   email?: string
 ) {
-  const url = new URL(`${backendUrl}/auth/google/start`);
+  const url = new URL("/auth/google/start", backendOrigin());
   url.searchParams.set("user_id", userId);
   url.searchParams.set("service", service);
   if (email) {

@@ -492,6 +492,10 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_or_publishable_key
 NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
 ```
 
+For Vercel, set `NEXT_PUBLIC_BACKEND_URL` to the Railway backend URL, for
+example `https://your-backend.up.railway.app`. Do not set it to the Vercel
+frontend URL.
+
 ### 9. Install And Run The Frontend
 
 ```bash
@@ -555,7 +559,7 @@ http://localhost:3000
 | --- | --- |
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL. |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase browser key. |
-| `NEXT_PUBLIC_BACKEND_URL` | FastAPI backend URL. |
+| `NEXT_PUBLIC_BACKEND_URL` | FastAPI backend URL. In production this should be the Railway backend URL, not the Vercel frontend URL. |
 
 ## Important API Endpoints
 
