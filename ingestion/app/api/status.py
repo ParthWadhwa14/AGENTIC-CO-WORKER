@@ -52,7 +52,7 @@ def setup_status():
         "serper_api_key_configured": bool(settings.SERPER_API_KEY),
         "token_encryption_configured": bool(settings.TOKEN_ENCRYPTION_KEY),
         "frontend_url": settings.FRONTEND_URL,
-        "google_oauth_redirect_uri": settings.GOOGLE_OAUTH_REDIRECT_URI,
+        "google_oauth_redirect_uri": settings.GOOGLE_REDIRECT_URI,
         "generation_model": settings.GENERATION_MODEL,
         "fallback_generation_model": settings.FALLBACK_GENERATION_MODEL,
         "runtime_context": runtime_context(),

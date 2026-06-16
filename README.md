@@ -396,7 +396,9 @@ TOKEN_ENCRYPTION_KEY=your_fernet_key
 
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
-GOOGLE_OAUTH_REDIRECT_URI=http://localhost:8000/auth/google/callback
+GOOGLE_REDIRECT_URI=http://localhost:8000/auth/google/callback
+# Railway production:
+# GOOGLE_REDIRECT_URI=https://agentic-co-worker-production.up.railway.app/auth/google/callback
 FRONTEND_URL=http://localhost:3000
 # Railway production:
 # FRONTEND_URL=https://agentic-co-worker.vercel.app
@@ -551,7 +553,7 @@ http://localhost:3000
 | `TOKEN_ENCRYPTION_KEY` | Fernet key for token encryption. |
 | `GOOGLE_CLIENT_ID` | Google OAuth client id. |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth client secret. |
-| `GOOGLE_OAUTH_REDIRECT_URI` | Backend OAuth callback URL. |
+| `GOOGLE_REDIRECT_URI` | Backend OAuth callback URL. In production this should be the Railway callback URL. |
 | `FRONTEND_URL` | Frontend URL used after OAuth. |
 | `SERPER_API_KEY` | Optional web search API key. |
 

@@ -1,4 +1,3 @@
-import os
 import secrets
 from urllib.parse import urlparse
 
@@ -23,9 +22,22 @@ SERVICE_CONFIG = {
 
 
 def _allow_local_http_oauth() -> None:
-    parsed = urlparse(settings.GOOGLE_OAUTH_REDIRECT_URI)
+    if not settings.GOOGLE_REDIRECT_URI:
+        return
+    parsed = urlparse(settings.GOOGLE_REDIRECT_URI)
     if parsed.scheme == "http" and parsed.hostname in {"localhost", "127.0.0.1"}:
+        import os
+
         os.environ.setdefault("OAUTHLIB_INSECURE_TRANSPORT", "1")
+
+
+def _configured_authorization_response(authorization_response: str) -> str:
+    if not settings.GOOGLE_REDIRECT_URI:
+        raise ValueError("Set GOOGLE_REDIRECT_URI before starting Google OAuth.")
+
+    configured = urlparse(settings.GOOGLE_REDIRECT_URI)
+    actual = urlparse(authorization_response)
+    return configured._replace(query=actual.query, fragment=actual.fragment).geturl()
 
 
 class GoogleOAuthService:
@@ -40,11 +52,14 @@ class GoogleOAuthService:
         )
 
     def _flow(self, scopes: list[str], state: str | None = None) -> Flow:
+        if not settings.GOOGLE_REDIRECT_URI:
+            raise ValueError("Set GOOGLE_REDIRECT_URI before starting Google OAuth.")
+
         _allow_local_http_oauth()
         return Flow.from_client_config(
             load_google_client_config(),
             scopes=scopes,
-            redirect_uri=settings.GOOGLE_OAUTH_REDIRECT_URI,
+            redirect_uri=settings.GOOGLE_REDIRECT_URI,
             state=state,
         )
 
@@ -85,7 +100,11 @@ class GoogleOAuthService:
         flow = self._flow(scopes=oauth_state["scopes"], state=state)
         if oauth_state.get("code_verifier"):
             flow.code_verifier = oauth_state["code_verifier"]
-        flow.fetch_token(authorization_response=authorization_response)
+        flow.fetch_token(
+            authorization_response=_configured_authorization_response(
+                authorization_response
+            )
+        )
         account_id = self.credential_store.save_credentials(
             user_id=oauth_state["user_id"],
             credentials=flow.credentials,

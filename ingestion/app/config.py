@@ -136,13 +136,11 @@ class Settings:
     )
     GOOGLE_CLIENT_ID: str | None = os.getenv("GOOGLE_CLIENT_ID")
     GOOGLE_CLIENT_SECRET: str | None = os.getenv("GOOGLE_CLIENT_SECRET")
-    GOOGLE_OAUTH_REDIRECT_URI: str = os.getenv(
-        "GOOGLE_OAUTH_REDIRECT_URI",
-        os.getenv(
-            "GOOGLE_REDIRECT_URI",
-            "http://localhost:8000/auth/google/callback",
-        ),
+    GOOGLE_REDIRECT_URI: str | None = (
+        os.getenv("GOOGLE_REDIRECT_URI")
+        or os.getenv("GOOGLE_OAUTH_REDIRECT_URI")
     )
+    GOOGLE_OAUTH_REDIRECT_URI: str | None = GOOGLE_REDIRECT_URI
     FRONTEND_URL: str = os.getenv(
         "FRONTEND_URL",
         "http://localhost:3000",

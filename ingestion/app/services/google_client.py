@@ -13,7 +13,7 @@ def load_google_client_config() -> dict:
             return json.load(handle)
 
     if settings.GOOGLE_CLIENT_ID and settings.GOOGLE_CLIENT_SECRET:
-        return {
+        config = {
             "web": {
                 "client_id": settings.GOOGLE_CLIENT_ID,
                 "client_secret": settings.GOOGLE_CLIENT_SECRET,
@@ -22,9 +22,11 @@ def load_google_client_config() -> dict:
                 "auth_provider_x509_cert_url": (
                     "https://www.googleapis.com/oauth2/v1/certs"
                 ),
-                "redirect_uris": [settings.GOOGLE_OAUTH_REDIRECT_URI],
             }
         }
+        if settings.GOOGLE_REDIRECT_URI:
+            config["web"]["redirect_uris"] = [settings.GOOGLE_REDIRECT_URI]
+        return config
 
     raise ValueError(
         "Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET, or set "

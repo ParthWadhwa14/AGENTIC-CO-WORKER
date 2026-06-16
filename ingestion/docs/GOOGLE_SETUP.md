@@ -24,7 +24,7 @@ Download the client JSON and set:
 
 ```bash
 GOOGLE_CLIENT_SECRETS_FILE=/absolute/path/to/client_secret.json
-GOOGLE_OAUTH_REDIRECT_URI=http://localhost:8000/auth/google/callback
+GOOGLE_REDIRECT_URI=http://localhost:8000/auth/google/callback
 FRONTEND_URL=http://localhost:3000
 ```
 
@@ -33,8 +33,15 @@ Or set the client ID and secret directly:
 ```bash
 GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
-GOOGLE_OAUTH_REDIRECT_URI=http://localhost:8000/auth/google/callback
+GOOGLE_REDIRECT_URI=http://localhost:8000/auth/google/callback
 FRONTEND_URL=http://localhost:3000
+```
+
+For Railway, use:
+
+```bash
+GOOGLE_REDIRECT_URI=https://agentic-co-worker-production.up.railway.app/auth/google/callback
+FRONTEND_URL=https://agentic-co-worker.vercel.app
 ```
 
 ## 3. Env
