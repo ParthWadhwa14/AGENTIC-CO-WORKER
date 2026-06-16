@@ -9,6 +9,7 @@ from app.storage.metadata_store import MetadataStore, utc_now
 DEFAULT_GMAIL_QUERY = "newer_than:180d -in:spam -in:trash"
 GMAIL_CHUNK_SIZE = 800
 GMAIL_CHUNK_OVERLAP = 120
+DEFAULT_GMAIL_MAX_MESSAGES = 25
 
 
 class GmailSyncService:
@@ -35,7 +36,7 @@ class GmailSyncService:
     def initial_sync(
         self,
         query: str = DEFAULT_GMAIL_QUERY,
-        max_messages: int = 100,
+        max_messages: int = DEFAULT_GMAIL_MAX_MESSAGES,
         label_ids: list[str] | None = None,
     ) -> dict:
         synced = 0

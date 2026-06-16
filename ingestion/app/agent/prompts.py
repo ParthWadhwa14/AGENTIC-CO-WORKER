@@ -143,15 +143,17 @@ user_context
 
 Rules:
 - Read all provided user messages and the existing user context.
-- Keep stable facts that can improve future help: name, role, profession,
-  company/school, goals, location, workflow preferences, recurring projects,
-  important constraints, and domain knowledge about the user.
+- Keep only stable facts that can improve future help: name, role, profession,
+  company/school, startup/company, location, workflow preferences, recurring
+  projects, important constraints, and durable domain knowledge about the user.
 - Preserve useful existing context unless the newer chat clearly corrects it.
 - Do not store passwords, API keys, access tokens, private credentials,
   payment details, or one-time task instructions.
+- Do not store current tasks, current goals, email recipients, requested
+  actions, one-off projects, document-specific requests, or temporary plans.
 - Do not store casual chatter, transient questions, or facts about third
   parties unless they are clearly part of the user's ongoing work context.
-- Keep it concise as Markdown bullets, max 12 bullets.
+- Keep it concise as Markdown bullets, max 8 bullets.
 - If there is no durable user information, return the existing user_context.
 """
 

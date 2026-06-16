@@ -483,7 +483,7 @@ export function WorkspaceApp({ session }: WorkspaceAppProps) {
       profileResult,
       scopeResult
     ] = await Promise.all([
-      getSetupStatus(),
+      getSetupStatus(session.user.id),
       getConnectionStatus(session.user.id),
       getDocuments(session.user.id),
       getAgentProfile(session.user.id),
@@ -774,6 +774,12 @@ export function WorkspaceApp({ session }: WorkspaceAppProps) {
           : "No matching indexed sources were found yet.",
         result.references?.length ? "success" : "info"
       );
+      const profileResult = await getAgentProfile(session.user.id);
+      setProfile({
+        agent_description: profileResult.agent_description || "",
+        user_context: profileResult.user_context || "",
+        response_preferences: profileResult.response_preferences || ""
+      });
     } catch (error) {
       setChatTurns((current) =>
         current.map((turn) =>
@@ -1510,7 +1516,8 @@ export function WorkspaceApp({ session }: WorkspaceAppProps) {
             </div>
             {setup?.qdrant ? (
               <p className="mt-2 text-xs text-[var(--muted)]">
-                Vector chunks: {setup.qdrant.chunk_count}
+                Indexed docs: {setup.qdrant.indexed_document_count || 0} · User
+                vector chunks: {setup.qdrant.chunk_count || 0}
               </p>
             ) : null}
             <div className="mt-3 space-y-2">

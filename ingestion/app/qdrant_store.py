@@ -105,22 +105,42 @@ class QdrantStore:
             ),
         )
 
-    def search(self, query: str, limit: int = 8, source_type: str | None = None):
+    def search(
+        self,
+        query: str,
+        limit: int = 8,
+        source_type: str | None = None,
+        document_ids: list[str] | None = None,
+    ):
         query_vector = self.embedder.embed_text(query)
 
         query_filter = None
+        conditions = []
 
         if source_type:
-            from qdrant_client.models import Filter, FieldCondition, MatchValue
+            from qdrant_client.models import FieldCondition, MatchValue
 
-            query_filter = Filter(
-                must=[
-                    FieldCondition(
-                        key="source_type",
-                        match=MatchValue(value=source_type),
-                    )
-                ]
+            conditions.append(
+                FieldCondition(
+                    key="source_type",
+                    match=MatchValue(value=source_type),
+                )
             )
+
+        if document_ids:
+            from qdrant_client.models import FieldCondition, MatchAny
+
+            conditions.append(
+                FieldCondition(
+                    key="document_id",
+                    match=MatchAny(any=document_ids),
+                )
+            )
+
+        if conditions:
+            from qdrant_client.models import Filter
+
+            query_filter = Filter(must=conditions)
 
         response = self.client.query_points(
         collection_name=settings.QDRANT_COLLECTION,

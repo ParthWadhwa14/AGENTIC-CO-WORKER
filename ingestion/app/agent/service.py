@@ -62,6 +62,42 @@ def _parse_json_object(raw: str) -> dict:
     return json.loads(cleaned)
 
 
+TRANSIENT_MEMORY_LABELS = {
+    "task",
+    "current task",
+    "goal",
+    "current goal",
+    "requested action",
+    "email",
+    "recipient",
+    "attachment",
+    "draft",
+}
+
+
+def _sanitize_user_context(user_context: str) -> str:
+    kept = []
+    for raw_line in user_context.splitlines():
+        line = raw_line.strip()
+        normalized = line.lstrip("-* ").strip()
+        label = normalized.split(":", 1)[0].strip().lower().strip("*")
+        if label in TRANSIENT_MEMORY_LABELS:
+            continue
+        if any(
+            phrase in normalized.lower()
+            for phrase in [
+                "draft email",
+                "send email",
+                "attached document",
+                "attached documents",
+                "earnmoneynow",
+            ]
+        ):
+            continue
+        kept.append(raw_line)
+    return "\n".join(kept).strip()
+
+
 def _user_messages_for_memory(
     query: str,
     conversation_history: list[dict[str, str]] | None = None,
@@ -83,12 +119,21 @@ def _profile_with_chat_memory(
     query: str,
     conversation_history: list[dict[str, str]] | None = None,
 ) -> dict:
+    existing_user_context = profile.get("user_context") or ""
+    sanitized_existing_user_context = _sanitize_user_context(existing_user_context)
     user_messages = _user_messages_for_memory(query, conversation_history)
     if not user_messages:
+        if sanitized_existing_user_context != existing_user_context.strip():
+            return metadata_store.upsert_agent_profile(
+                user_id=user_id,
+                agent_description=profile.get("agent_description") or "",
+                user_context=sanitized_existing_user_context,
+                response_preferences=profile.get("response_preferences") or "",
+            )
         return profile
 
     memory_input = {
-        "existing_user_context": profile.get("user_context") or "",
+        "existing_user_context": sanitized_existing_user_context,
         "user_messages": user_messages,
     }
     try:
@@ -99,11 +144,11 @@ def _profile_with_chat_memory(
             ]
         )
         parsed = _parse_json_object(raw)
-        user_context = (parsed.get("user_context") or "").strip()
+        user_context = _sanitize_user_context(parsed.get("user_context") or "")
     except Exception:
         return profile
 
-    if not user_context or user_context == (profile.get("user_context") or "").strip():
+    if not user_context or user_context == sanitized_existing_user_context:
         return profile
 
     return metadata_store.upsert_agent_profile(

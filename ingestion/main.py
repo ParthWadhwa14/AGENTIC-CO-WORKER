@@ -41,7 +41,11 @@ def detect_loader(file_path: str):
     raise ValueError(f"Unsupported file type: {suffix}")
 
 
-def ingest_file(file_path: str, document_id: str | None = None):
+def ingest_file(
+    file_path: str,
+    document_id: str | None = None,
+    store: QdrantStore | None = None,
+):
     document_id = document_id or str(uuid4())
 
     loader, chunking_mode = detect_loader(file_path)
@@ -71,7 +75,7 @@ def ingest_file(file_path: str, document_id: str | None = None):
     print(f"Parsed elements: {len(elements)}")
     print(f"Created chunks: {len(chunks)}")
 
-    store = QdrantStore()
+    store = store or QdrantStore()
     store.upsert_chunks(chunks)
 
     print("Ingestion complete.")

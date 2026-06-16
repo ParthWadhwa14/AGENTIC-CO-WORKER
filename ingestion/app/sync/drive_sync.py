@@ -178,6 +178,7 @@ class DriveSyncService:
 
     def download_or_export(self, file: dict) -> str:
         file_id = file["id"]
+        mime_type = file.get("mimeType")
         safe_name = self.safe_name(file.get("name") or file_id)
         output_path = settings.DRIVE_DOWNLOAD_DIR / self.user_id / f"{file_id}_{safe_name}"
         if mime_type == GOOGLE_DOC_MIME_TYPE:

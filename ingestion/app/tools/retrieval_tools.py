@@ -24,6 +24,7 @@ class RetrievalTools:
     def search_workspace(
         self,
         query: str,
+        user_id: str | None = None,
         source_types: list[str] | None = None,
         limit: int = 8,
         document_ids: list[str] | None = None,
@@ -34,6 +35,35 @@ class RetrievalTools:
         source_types = source_types or DEFAULT_SOURCE_TYPES
         errors: list[str] = []
         priority_document_ids = priority_document_ids or []
+        allowed_document_ids: list[str] | None = None
+
+        if user_id:
+            allowed_document_ids = [
+                document["id"]
+                for document in self.metadata_store.list_documents(
+                    user_id,
+                    limit=500,
+                )
+                if document.get("index_status") == "indexed"
+            ]
+            if not allowed_document_ids:
+                return [], []
+
+        if allowed_document_ids is not None:
+            allowed_set = set(allowed_document_ids)
+            if document_ids:
+                document_ids = [
+                    document_id
+                    for document_id in document_ids
+                    if document_id in allowed_set
+                ]
+                if not document_ids:
+                    return [], []
+            priority_document_ids = [
+                document_id
+                for document_id in priority_document_ids
+                if document_id in allowed_set
+            ]
 
         if document_ids:
             try:
@@ -65,6 +95,7 @@ class RetrievalTools:
                         query=query,
                         limit=limit,
                         source_type=source_type,
+                        document_ids=allowed_document_ids,
                     )
                     all_results.extend(results)
                 except Exception as exc:
@@ -84,6 +115,7 @@ class RetrievalTools:
                         query=query,
                         limit=limit,
                         source_type=source_type,
+                        document_ids=allowed_document_ids,
                     )
                     all_results.extend(results)
                 except Exception as exc:
@@ -100,9 +132,11 @@ class RetrievalTools:
             if document_id and document_id not in document_status_cache:
                 document = self.metadata_store.get_document(document_id)
                 document_status_cache[document_id] = (
-                    document.get("index_status") if document else None
+                    document.get("index_status")
+                    if document and (not user_id or document.get("user_id") == user_id)
+                    else None
                 )
-            if document_id and document_status_cache.get(document_id) == "deleted":
+            if document_id and document_status_cache.get(document_id) != "indexed":
                 continue
             active_results.append(result)
 

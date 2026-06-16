@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from qdrant_client import QdrantClient
+from qdrant_client.models import FieldCondition, Filter, MatchAny
 
 from app.config import settings
 from app.qdrant_store import QdrantStore
@@ -17,11 +18,24 @@ class CleanupDocumentsRequest(BaseModel):
 
 
 @router.get("/setup/status")
-def setup_status():
+def setup_status(user_id: str | None = Query(None)):
+    metadata_store = MetadataStore()
+    user_documents = (
+        metadata_store.list_documents(user_id, limit=500)
+        if user_id
+        else []
+    )
+    indexed_document_ids = [
+        document["id"]
+        for document in user_documents
+        if document.get("index_status") == "indexed"
+    ]
     qdrant_status = {
         "reachable": False,
         "collection_exists": False,
         "chunk_count": 0,
+        "collection_chunk_count": 0,
+        "indexed_document_count": len(indexed_document_ids),
         "error": None,
     }
     try:
@@ -35,10 +49,23 @@ def setup_status():
             settings.QDRANT_COLLECTION in collections
         )
         if qdrant_status["collection_exists"]:
-            qdrant_status["chunk_count"] = client.count(
+            qdrant_status["collection_chunk_count"] = client.count(
                 collection_name=settings.QDRANT_COLLECTION,
                 exact=True,
             ).count
+            if indexed_document_ids:
+                qdrant_status["chunk_count"] = client.count(
+                    collection_name=settings.QDRANT_COLLECTION,
+                    count_filter=Filter(
+                        must=[
+                            FieldCondition(
+                                key="document_id",
+                                match=MatchAny(any=indexed_document_ids),
+                            )
+                        ]
+                    ),
+                    exact=True,
+                ).count
     except Exception as exc:
         qdrant_status["error"] = str(exc)
 

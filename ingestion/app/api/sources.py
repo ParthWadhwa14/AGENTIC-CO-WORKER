@@ -378,7 +378,7 @@ def _add_gmail_discovery_query(
         name=f"Agent Gmail search: {safe_query}",
         selector={
             "q": safe_query,
-            "max_messages": min(max_results * 10, 100),
+            "max_messages": min(max(max_results, 10), 25),
             "agent_selected": True,
         },
     )

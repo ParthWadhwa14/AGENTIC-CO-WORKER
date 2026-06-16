@@ -1385,6 +1385,7 @@ def retrieve_node(state: AgentState) -> dict:
     try:
         workspace_chunks, _ = RetrievalTools().search_workspace(
             query=search_query,
+            user_id=state.user_id,
             source_types=source_types,
             limit=state.limit,
             priority_document_ids=non_live_priority_ids,
@@ -1414,6 +1415,7 @@ def retrieve_node(state: AgentState) -> dict:
             try:
                 expanded_chunks, _ = RetrievalTools().search_workspace(
                     query=search_query,
+                    user_id=state.user_id,
                     source_types=DEFAULT_SOURCE_TYPES,
                     limit=state.limit,
                     priority_document_ids=non_live_priority_ids,

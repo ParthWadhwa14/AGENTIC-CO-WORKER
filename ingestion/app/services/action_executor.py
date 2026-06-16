@@ -1,4 +1,5 @@
 import re
+import time
 from typing import Any
 from pathlib import Path
 
@@ -27,6 +28,7 @@ MAX_DOC_TEXT_CHARS = 50000
 MAX_SHEET_CELLS = 500
 MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
 MAX_ATTACHMENTS = 5
+SENT_LABEL = "SENT"
 
 
 class ActionGuardrailError(ValueError):
@@ -114,6 +116,38 @@ def _validate_sheet_values(values: Any) -> list[list[str]]:
     if cell_count > MAX_SHEET_CELLS:
         raise ActionGuardrailError(f"Too many sheet cells. Limit is {MAX_SHEET_CELLS}.")
     return normalized
+
+
+def _verify_sent_message(gmail: GmailConnector, result: dict) -> dict:
+    message_id = result.get("id")
+    if not message_id:
+        raise ActionGuardrailError("Gmail send API did not return a sent message id.")
+
+    last_error = None
+    for _ in range(3):
+        try:
+            message = gmail.get_message_metadata(message_id)
+            labels = set(message.get("labelIds") or [])
+            if SENT_LABEL in labels:
+                return {
+                    **result,
+                    "verified_sent": True,
+                    "gmail_message_id": message_id,
+                    "thread_id": message.get("threadId") or result.get("threadId"),
+                    "labels": sorted(labels),
+                    "web_url": f"https://mail.google.com/mail/u/0/#sent/{message_id}",
+                }
+            last_error = (
+                "Gmail returned the message, but it is not labeled as sent yet."
+            )
+        except Exception as exc:
+            last_error = str(exc)
+        time.sleep(0.5)
+
+    raise ActionGuardrailError(
+        "Gmail send could not be verified. "
+        f"{last_error or 'Please check Gmail Sent Mail before retrying.'}"
+    )
 
 
 def validate_action(action: dict) -> dict:
@@ -257,8 +291,8 @@ def execute_action(user_id: str, action: dict) -> dict:
                 )
         if action_type == "create_gmail_draft" and not result.get("id"):
             raise ActionGuardrailError("Gmail draft API did not return a draft id.")
-        if action_type == "send_gmail" and not result.get("id"):
-            raise ActionGuardrailError("Gmail send API did not return a sent message id.")
+        if action_type == "send_gmail":
+            result = _verify_sent_message(gmail, result)
         return {
             "status": "executed",
             "action_type": action_type,

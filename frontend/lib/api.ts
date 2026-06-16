@@ -53,8 +53,9 @@ async function request(path: string, options: RequestInit = {}) {
   return response.json();
 }
 
-export async function getSetupStatus() {
-  return request("/setup/status");
+export async function getSetupStatus(userId?: string) {
+  const suffix = userId ? `?user_id=${encodeURIComponent(userId)}` : "";
+  return request(`/setup/status${suffix}`);
 }
 
 export function googleConnectUrl(

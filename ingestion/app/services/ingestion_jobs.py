@@ -15,8 +15,9 @@ def process_ingestion_job(
         store.update_ingestion_job(job_id, status="running")
         store.update_document_status(document_id, index_status="indexing")
 
-        QdrantStore().delete_document_chunks(document_id)
-        result = ingest_file(local_path, document_id=document_id)
+        qdrant = QdrantStore()
+        qdrant.delete_document_chunks(document_id)
+        result = ingest_file(local_path, document_id=document_id, store=qdrant)
 
         store.update_ingestion_job(job_id, status="indexed")
         store.update_document_status(
